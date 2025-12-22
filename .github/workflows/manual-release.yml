@@ -17,13 +17,13 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            target: x86_64-linux-gnu.2.3
+            cc: zig cc -target x86_64-linux-gnu.2.3
             exe: fliprun
           - os: windows-latest
-            target: x86_64-windows-gnu
+            cc: gcc
             exe: fliprun.exe
     permissions:
-      contents: write   # tag push & release 作成に必要
+      contents: write
 
     steps:
       - name: Checkout source
@@ -38,6 +38,7 @@ jobs:
           target: x86_64-linux-gnu.2.3
       - name: Decide tag name
         id: vars
+        shell: bash
         run: |
           if [ -n "${{ inputs.tag }}" ]; then
             echo "TAG=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
@@ -56,10 +57,14 @@ jobs:
       - name: Checkout tag
         run: |
           git checkout "${{ steps.vars.outputs.TAG }}"
-
+      - name: Set CC (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        id: cc
+        run: |
+          echo "CREATE_TAG=true" >> "$GITHUB_OUTPUT"
       - name: Build
         env:
-          CC: zig cc -target ${{ matrix.target }}
+          CC: ${{ matrix.cc }}
         run: |
           make
 
