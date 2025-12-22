@@ -1,4 +1,4 @@
 all:
-	gcc fliprun.c -o fliprun
+	$(CC) fliprun.c -o fliprun
 clean:
 	rm fliprun
