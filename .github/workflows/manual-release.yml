@@ -1,14 +1,9 @@
 name: manual release
 
 on:
-  workflow_dispatch:
-    inputs:
-      ref:
-        description: "Commit SHA / branch / existing tag to build from"
-        required: true
-      tag:
-        description: "New tag name (leave empty to use existing tag in ref)"
-        required: false
+  push:
+    tags:
+      - '*'
 
 jobs:
   build-release:
@@ -18,60 +13,39 @@ jobs:
         include:
           - os: ubuntu-latest
             cc: zig cc -target x86_64-linux-gnu.2.3
-            exe: fliprun
           - os: windows-latest
             cc: gcc
-            exe: fliprun.exe
+            suffix: .exe
+          - os: macos-latest
+            cc: clang -mmacosx-version-min=10.13 -arch x86_64
+            suffix: -darwin
+            strip: -x
     permissions:
       contents: write
 
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ inputs.ref }}
       - name: Setup Zig
+        if: runner.os == 'Linux'
         uses: Rul1an/zig-cross-compile-action@v1
         with:
           version: 0.13.0
           target: x86_64-linux-gnu.2.3
-      - name: Decide tag name
-        id: vars
-        shell: bash
-        run: |
-          if [ -n "${{ inputs.tag }}" ]; then
-            echo "TAG=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
-            echo "CREATE_TAG=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "TAG=${{ inputs.ref }}" >> "$GITHUB_OUTPUT"
-            echo "CREATE_TAG=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Create and push tag
-        if: steps.vars.outputs.CREATE_TAG == 'true'
-        run: |
-          git tag "${{ steps.vars.outputs.TAG }}"
-          git push origin "${{ steps.vars.outputs.TAG }}"
-
-      - name: Checkout tag
-        run: |
-          git checkout "${{ steps.vars.outputs.TAG }}"
-      - name: Set CC (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        id: cc
-        run: |
-          echo "CREATE_TAG=true" >> "$GITHUB_OUTPUT"
       - name: Build
         env:
           CC: ${{ matrix.cc }}
         run: |
           make
-
+      - name: Move
+        if: runner.os == 'macOS'
+        run: |
+          mv fliprun fliprun${{ matrix.suffix }}
+      - name: Strip
+        run: |
+          strip ${{ matrix.strip }} fliprun${{ matrix.suffix }}
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.vars.outputs.TAG }}
-          name: ${{ steps.vars.outputs.TAG }}
           files: |
-            ${{ matrix.exe }}
+            fliprun${{ matrix.suffix }}
